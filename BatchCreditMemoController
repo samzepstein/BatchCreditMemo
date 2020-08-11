@@ -23,7 +23,7 @@ global class BatchCreditMemoController implements Database.Batchable<SObject>, D
                                        
         return Database.getQueryLocator(thisOpp);
     }
-    public creditMemController(ApexPages.StandardController controller){
+    /*public creditMemController(ApexPages.StandardController controller){
         // this.creditOpptyId = (Opportunity) controller.getRecord();
         if(!Test.isRunningTest()){
             Opportunity thisOpp = [SELECT Name, Contract_Start_Date__c, Contract_End_Date__c, CloseDate, 
@@ -46,8 +46,10 @@ return creditOppty;
 }
 */
     
+    //used to gather every opp field name to create clone
     public List<Opportunity> returnOppty(Id oppId){
-        DescribeSObjectResult describeResult = oppId.getSObjectType().getDescribe();	
+        DescribeSObjectResult describeResult = oppId.getSObjectType().getDescribe();
+        //getting every field on Opp
         List<String> fieldNames = new List<String>( describeResult.fields.getMap().keySet() );	
         String query =  ' SELECT ' + String.join( fieldNames, ',' ) + 
             ' FROM ' + describeResult.getName() + 
@@ -95,6 +97,7 @@ return creditOppty;
         System.debug('QuoteLines Created: ' + qlList);
     }
     
+    //don't need, can remove -- add Price_List = qte.PriceList
     @future
     public static void setPriceList(Id qId, String priceList, Id rep){
         SBQQ__Quote__c q = [SELECT Id FROM SBQQ__Quote__c WHERE Id = :qId LIMIT 1];
@@ -166,21 +169,29 @@ return creditOppty;
             update creditOppty;
         }
         
+        //gets passed into createQuote method as qte
         SBQQ__Quote__c creditQuote = [SELECT SBQQ__Type__c,SBQQ__Account__c, Price_List__c, Partner_Rep__c 
                                       FROM SBQQ__Quote__c 
                                       WHERE SBQQ__Opportunity2__c = :creditOppty.Id AND SBQQ__Primary__c = True 
                                       LIMIT 1];
         
+        
+        //passed into createQuoteLines method
         List<SBQQ__QuoteLine__c> creditQuoteLines = [SELECT SBQQ__StartDate__c, SBQQ__EndDate__c, SBQQ__Quantity__c,
                                                      SBQQ__DiscountSchedule__c, SBQQ__Product__c, Deal_Type__c, Sales_Discount__c,
                                                      SBQQ__OptionDiscount__c, SBQQ__OptionLevel__c, SBQQ__OptionType__c
                                                      FROM SBQQ__QuoteLine__c 
                                                      WHERE SBQQ__Quote__c = :creditQuote.Id];       
         
+        //cast a list of opps in a batch, create quote for each of the opps
+        //
+        //created quuote and quote lines for CM opp
         SBQQ__Quote__C cmQuote = createQuote(cmOppty.Id, creditQuote);
         createQuoteLines(cmOppty.Id, cmQuote, creditQuoteLines,-1);
         setPriceList(cmQuote.Id, creditQuote.Price_List__c, creditQuote.Partner_Rep__c);
         
+        
+        //created quuote and quote lines for rev Opp
         If(needsRev){
             SBQQ__Quote__c revQuote = createQuote(revOppty.Id,creditQuote);
             createQuoteLines(cmOppty.Id, revQuote, creditQuoteLines,1);
@@ -189,6 +200,7 @@ return creditOppty;
         
         String addrs = '/'+ cmOppty.Id;
         
+        //navigate too one page from another, remove two bottom lines with batch
         PageReference pr = new PageReference(addrs);
         return pr;
     }
