@@ -1,13 +1,45 @@
 global class BatchCreditMemoOpportunity implements Database.Batchable<SObject>, Database.Stateful{
     
+    global String cmReason;
+    global Boolean needsRev;
+    global Boolean isInternal;
+    global Id oppId;
     
-    global BatchCreditMemoOpportunity(String cmReason, Boolean needsRev, Boolean isInternal){
+    
+    global BatchCreditMemoOpportunity(String cmReason, Boolean needsRev, Boolean isInternal, Id oppId){
         this.cmReason = cmReason;
         this.needsRev = needsRev;
         this.isInternal = isInternal;
+        this.oppId = oppId;
         
     }
+    
+    
+    global Database.QueryLocator start(Database.BatchableContext bc) {
+        
+        system.debug('start');
+        
+        String thisOpp = Test.isRunningTest() ?  '[SELECT Name, Contract_Start_Date__c, Contract_End_Date__c, CloseDate,'+
+                                                       'Po_Number__c, Intacct_Invoice_Number_v2__r.Name'+
+                                                       'FROM Opportunity LIMIT 1]' : '[SELECT Name, Contract_Start_Date__c, Contract_End_Date__c, CloseDate,'+
+                                                                                    'Po_Number__c, Intacct_Invoice_Number_v2__r.Name'+ 
+                                                                                    'FROM Opportunity WHERE Id = :oppId]';
         
         
+        return Database.getQueryLocator(thisOpp);
         
+        
+    }
+    
+    global void execute(Database.BatchableContext bc, List<Account> scope){
+        
+        system.debug('execute');
+        
+    }
+    
+    global void finish(Database.BatchableContext bc){
+        
+        system.debug('finish');
+    }
+    
 }
