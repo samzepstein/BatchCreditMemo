@@ -1,0 +1,13 @@
+global class BatchCreditMemoOpportunity implements Database.Batchable<SObject>, Database.Stateful{
+    
+    
+    global BatchCreditMemoOpportunity(String cmReason, Boolean needsRev, Boolean isInternal){
+        this.cmReason = cmReason;
+        this.needsRev = needsRev;
+        this.isInternal = isInternal;
+        
+    }
+        
+        
+        
+}
