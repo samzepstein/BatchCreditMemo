@@ -1,0 +1,46 @@
+global class BatchCreditMemoQuote implements Database.Batchable<SObject>, Database.Stateful{
+    
+    Set<Id> quoteIds = new Set<ID>();
+    
+    List<Id> cmOppIds = new List<ID>();
+    
+    List<Id> revOppIds = new List<ID>();
+
+    
+    
+    
+    
+    global BatchCreditMemoQuote(List<ID> cmOppIds, List<ID> revOppIds){
+        this.cmOppIds = cmOppIds;
+        this.revOppIds = revOppIds;
+        
+        
+    }
+    
+    
+    global Database.QueryLocator start(Database.BatchableContext bc) {
+        
+        String OppList = Test.isRunningTest() ?  '[SELECT Name, Contract_Start_Date__c, Contract_End_Date__c, CloseDate,'+
+            'Po_Number__c, Intacct_Invoice_Number_v2__r.Name'+
+            'FROM Opportunity LIMIT 1]' : '[SELECT Name, Contract_Start_Date__c, Contract_End_Date__c, CloseDate,'+
+                'Po_Number__c, Intacct_Invoice_Number_v2__r.Name'+ 
+                'FROM Opportunity WHERE Id = :cmOppIds OR Id = :revOppIds]';
+        
+        
+        return Database.getQueryLocator(OppList);
+                
+        
+    }
+    
+    
+    global void execute(Database.BatchableContext bc, List<Opportunity> scope){
+        
+        system.debug('start'); 
+    }
+    
+    
+    
+    global void finish(Database.BatchableContext bc){
+        
+    }
+}
