@@ -1,0 +1,146 @@
+global class BatchCreditMemoQuoteLine implements Database.Batchable<SObject>, Database.Stateful{
+    
+    global Map<ID, Map<String,ID>> megaQuoteMap = new Map<ID, Map<String,ID>>();
+    
+    Map<String, ID> quoteMapToPass = new Map<String, Id>();
+    
+    
+    
+    
+    global BatchCreditMemoQuoteLine(Map<ID, Map<String,ID>> megaQuoteMap, Map<String, ID> quoteMapToPass){
+        this.megaQuoteMap = megaQuoteMap;
+        this.quoteMapToPass = quoteMapToPass;
+        
+    }
+    
+    
+    public static void createQuoteLines(SBQQ__Quote__c qt, List<SBQQ__QuoteLine__c> creditQtLines,Integer i){
+        List<SBQQ__QuoteLine__c> qlList = new List<SBQQ__QuoteLine__c>();
+        
+        System.debug('Test Oppty QL for credit: ' + creditQtLines);
+        
+        for(SBQQ__QuoteLine__c ql : creditQtLines) {
+            SBQQ__QuoteLine__c qLEntry = new SBQQ__QuoteLine__c(
+                SBQQ__Quote__c = qt.Id,
+                SBQQ__StartDate__c = ql.SBQQ__StartDate__c,
+                SBQQ__EndDate__c = ql.SBQQ__EndDate__c,
+                SBQQ__Quantity__c = ql.SBQQ__Quantity__c * i,
+                SBQQ__DiscountSchedule__c = ql.SBQQ__DiscountSchedule__c,
+                SBQQ__Product__c = ql.SBQQ__Product__c,
+                End_User__c  = qt.SBQQ__Account__c,
+                Deal_Type__c = ql.Deal_Type__c,
+                Sales_Discount__c = ql.Sales_Discount__c,
+                SBQQ__OptionDiscount__c = ql.SBQQ__OptionDiscount__c,
+                SBQQ__OptionLevel__c = ql.SBQQ__OptionLevel__c,
+                SBQQ__OptionType__c = ql.SBQQ__OptionType__c);
+            
+            qlList.add(qlEntry);
+        }
+        
+        insert qlList;
+        System.debug('QuoteLines Created: ' + qlList);
+    }
+    
+    
+    global Database.QueryLocator start(Database.BatchableContext bc) {
+        
+        
+        
+        List<Id> quoteMapIds = new List<Id>();
+        
+        
+        List<Map<String,ID>> megaQuoteMapValues = megaQuoteMap.values();
+        
+        for(Map<String,ID> quoteId : megaQuoteMapValues){
+            
+            quoteMapIds.addAll(quoteId.values());
+            
+            
+        }
+        
+        system.debug('quoteMapIds:'+ quoteMapIds);
+        
+        return Database.getQueryLocator(
+            [SELECT Id, SBQQ__Type__c,SBQQ__Account__c, Price_List__c, Partner_Rep__c, SBQQ__Opportunity2__c, SBQQ__Opportunity2__r.CM_Opportunity__c, SBQQ__Opportunity2__r.Credited_Opportunity__c, SBQQ__Opportunity2__r.REV_Opportunity__c
+             FROM SBQQ__Quote__c 
+             WHERE Id IN :quoteMapIds]
+            
+        );
+        
+        
+        
+    }
+    
+    
+    
+    
+    global void execute(Database.BatchableContext bc, List<SBQQ__Quote__c> scope){
+        
+        List<SBQQ__Quote__c> quoteList = [SELECT SBQQ__Type__c,SBQQ__Account__c, Price_List__c, Partner_Rep__c, SBQQ__Opportunity2__r.Credited_Opportunity__c, SBQQ__Opportunity2__r.CM_Opportunity__c,SBQQ__Opportunity2__r.REV_Opportunity__c
+                                          FROM SBQQ__Quote__c 
+                                          WHERE SBQQ__Opportunity2__r.id IN :megaQuoteMap.keySet() AND SBQQ__Primary__c = True 
+                                          LIMIT 1];
+        
+        List<SBQQ__QuoteLine__c> creditQuoteLines = [SELECT SBQQ__StartDate__c, SBQQ__EndDate__c, SBQQ__Quantity__c,
+                                                     SBQQ__DiscountSchedule__c, SBQQ__Product__c, Deal_Type__c, Sales_Discount__c,
+                                                     SBQQ__OptionDiscount__c, SBQQ__OptionLevel__c, SBQQ__OptionType__c, SBQQ__Quote__r.SBQQ__Opportunity2__r.Credited_Opportunity__c, 
+                                                     SBQQ__Quote__r.SBQQ__Opportunity2__r.CM_Opportunity__c, SBQQ__Quote__r.SBQQ__Opportunity2__r.REV_Opportunity__c
+                                                     FROM SBQQ__QuoteLine__c 
+                                                     WHERE SBQQ__Quote__c IN :quoteList];  
+        
+        
+        
+        system.debug('scope: '+scope);
+        
+        system.debug('quoteList: '+quoteList);
+        
+        system.debug('creditQuoteLines: '+creditQuoteLines);
+        
+        
+        System.debug('quoteMapToPass: ' +quoteMapToPass);
+        
+        for(SBQQ__Quote__c quote : scope){
+            
+
+            
+            
+            If(quote.SBQQ__Opportunity2__r.Credited_Opportunity__c != NULL && quote.SBQQ__Opportunity2__r.CM_Opportunity__c == NULL){
+                
+                createQuoteLines(quote, creditQuoteLines,-1);
+                
+                
+            }
+            
+            If(quote.SBQQ__Opportunity2__r.Credited_Opportunity__c != NULL && quote.SBQQ__Opportunity2__r.CM_Opportunity__c != NULL && quote.SBQQ__Opportunity2__r.REV_Opportunity__c == NULL){
+                
+                createQuoteLines(quote, creditQuoteLines,1);
+                
+                
+            }
+            
+        }
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+    }
+    
+    
+    
+    
+    global void finish(Database.BatchableContext bc){
+        
+        system.debug('done');
+        
+    }
+}
