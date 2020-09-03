@@ -1,0 +1,212 @@
+global class BatchCreditMemoOpportunity implements Database.Batchable<SObject>, Database.Stateful{
+    
+    //map to hold ID of CM and revised opp and associate them with string 'Revised' or 'Credit' - will pass to BatchCreditMemoQuote
+    //
+    
+    global Map<ID, Map<String,ID>> megaOppMap = new Map<ID, Map<String,ID>>();
+    
+    global Map<String, ID> oppMapToPass = new Map<String, Id>();
+    
+    public Map <Id,InvocableBatchCreditMemo.CreditMemoRequest> cmRequestMap;
+    
+    
+    
+    public BatchCreditMemoOpportunity(Map <Id, InvocableBatchCreditMemo.CreditMemoRequest> cmRequestMap){
+        this.cmRequestMap = cmRequestMap;
+        
+        
+    }
+    
+    
+    global Database.QueryLocator start(Database.BatchableContext bc) {
+        
+        system.debug('start');
+        
+        SET<ID> cmRequestMapSet = cmRequestMap.keySet();
+        
+        String thisOpp = Test.isRunningTest() ?  'SELECT Id, Name, Contract_Start_Date__c, Contract_End_Date__c, CloseDate, New_ACV_static__c'+
+            'Po_Number__c, Intacct_Invoice_Number_v2__r.Name'+
+            'FROM Opportunity LIMIT 1' : 'SELECT Id, Name, New_ACV_static__c, Contract_Start_Date__c, Contract_End_Date__c, CloseDate,'+
+                'Po_Number__c, Intacct_Invoice_Number_v2__r.Name FROM Opportunity WHERE Id IN :cmRequestMapSet';
+        
+        
+        return Database.getQueryLocator(thisOpp);
+        
+        
+    }
+    
+    /*public Opportunity getCreditOppty(){
+this.creditOppty = [SELECT Name, Contract_Start_Date__c, Contract_End_Date__c, CloseDate, 
+Po_Number__c, Intacct_Invoice_Number_v2__r.Name 
+FROM Opportunity 
+WHERE Id = :creditOppty.Id];
+return creditOppty;
+}
+*/
+    
+    public List<Opportunity> returnOppty(Opportunity creditOppty){
+        
+        Id oppId = creditOppty.Id;
+        
+        system.debug('oppId: '+ oppId);
+        
+        DescribeSObjectResult describeResult = creditOppty.getSObjectType().getDescribe();
+        //getting every field on Opp
+        List<String> fieldNames = new List<String>( describeResult.fields.getMap().keySet() );	
+        String query =  ' SELECT ' + String.join( fieldNames, ',' ) + 
+            ' FROM ' + describeResult.getName() + 
+            ' WHERE ' + ' id = :oppId ' + ' LIMIT 1 ';	
+        
+        system.debug('query: '+ query);
+        
+        List<SObject> records = Database.query( query );	
+        return records;
+    }
+    
+    public Opportunity createCreditMemoOpp(InvocableBatchCreditMemo.CreditMemoRequest cmr){
+        
+        Opportunity cmOppty = returnOppty(cmr.creditOppty)[0].clone();
+        
+        cmOppty.Name = cmr.creditOppty.Name + ' - CM';
+        cmOppty.StageName = 'Closing';
+        cmOppty.CloseDate = System.today();
+        cmOppty.PO_number__c += '-CM';
+        cmOppty.Secondary_Type__c = 'CM';
+        cmOppty.Invoiced__c = False;
+        cmOppty.Probability = 90.00;
+        cmOppty.CM_Intacct_Invoice_Number__c = cmr.creditOppty.Intacct_Invoice_Number_v2__r.Name;
+        cmOppty.SBQQ__Contracted__c = false;
+        cmOppty.Intacct_Invoice_Number_v2__c = null;
+        cmOppty.Do_not_send_welcome_letter__c = true;
+        cmOppty.Active_Checkbox__c = false;
+        cmOppty.SBQQ__PrimaryQuote__c = null;
+        cmOppty.unexpired_contract__c = false;
+        cmOppty.CM_REV_Reason__c = cmr.cmReason;
+        cmOppty.Credited_Opportunity__c = cmr.creditOppty.Id;
+        
+        If(cmr.creditOppty.New_ACV_static__c != NULL){
+            
+            cmOppty.New_ACV_static__c = cmr.creditOppty.New_ACV_static__c * -1;
+        }
+        
+        
+        return cmOppty;
+        
+        
+    }
+    
+    public Opportunity createRevisedOpp(Opportunity cmOppty, InvocableBatchCreditMemo.CreditMemoRequest cmr){
+        
+        Opportunity revOppty = cmOppty.clone();
+        
+        revOppty.Name = cmr.creditOppty.Name + ' - REV';
+        revOppty.Secondary_Type__c = null;
+        revOppty.PO_number__c = cmr.creditOppty.Po_Number__c + '-REV';
+        revOppty.CM_Opportunity__c = cmOppty.Id;
+        revOppty.Credited_Opportunity__c = cmr.creditOppty.Id;
+        revOppty.CM_Intacct_Invoice_Number__c = null;
+        revOppty.Exclude_from_Xactly__c = True;
+        revOppty.Do_not_Send_Invoice__c = cmr.isInternal;
+        
+        return revOppty;
+        
+        
+    }
+    
+    
+    
+    
+    global void execute(Database.BatchableContext bc, List<Opportunity> scope){
+        
+        
+        Map<Opportunity,Map<String,Opportunity>> allOppMap = new Map<Opportunity,Map<String,Opportunity>>();
+        
+        List<Opportunity> cmOppList = new List<Opportunity>();
+        List<Opportunity> revOppList = new List<Opportunity>();
+        
+        for (Opportunity opp : scope){
+            
+            Map<String,Opportunity> oppMap = new Map<String, Opportunity>();
+            
+            InvocableBatchCreditMemo.CreditMemoRequest cmr = cmRequestMap.get(opp.id);
+            
+            Boolean needsRev = cmr.needsRev;
+            
+            
+            Opportunity cmOpp = createCreditMemoOpp(cmr);
+            
+            if(needsRev){
+                Opportunity revOpp = createRevisedOpp(cmOpp,cmr);
+                oppMap.put('Revised', revOpp);
+                revOppList.add(revOpp);
+                cmOpp.Exclude_from_Xactly__c = True;
+                
+            }
+            
+            cmOppList.add(cmOpp);
+            oppMap.put('Credit', cmOpp);
+            allOppMap.put(opp,oppMap);
+        }
+        
+        List<Opportunity> insertOppList = new List<Opportunity>();
+        insertOppList.addAll(cmOppList);
+        insertOppList.addAll(revOppList);
+        
+        insert insertOppList;
+        
+        List<Opportunity> updateOpps = new List<Opportunity>();
+        
+        for(Opportunity returnedOpp : allOppMap.keySet()){
+            Map<String, Opportunity> oppMap = allOppMap.get(returnedOpp);
+            Opportunity creditOpp = oppMap.get('Credit');
+            
+            //add CM opp to map to pass to BatchCreditMemoQuote
+            oppMapToPass.put('Credit', creditOpp.Id);
+            
+            
+            
+            returnedOpp.CM_Opportunity__c = creditOpp.Id;
+            
+            if(oppMap.containsKey('Revised')){
+                Opportunity revOpp = oppMap.get('Revised');
+                
+                //add Rev opp to map to pass to BatchCreditMemoQuote
+                oppMapToPass.put('Revised', revOpp.Id);
+                
+                
+                returnedOpp.Rev_Opportunity__c = revOpp.Id;
+                creditOpp.Rev_Opportunity__c = revOpp.Id;
+                revOpp.CM_Opportunity__c = creditOpp.Id;
+                updateOpps.add(revOpp);
+            }
+            updateOpps.add(creditOpp);
+            updateOpps.add(returnedOpp);
+        }
+        
+        for (Opportunity opp : scope){     
+            
+            megaOppMap.put(opp.id, oppMapToPass);
+            
+        }
+        
+        
+        
+        
+        update updateOpps;
+        
+        system.debug('megaOppMap: '+ megaOppMap);
+        
+        
+        
+    }
+    
+    global void finish(Database.BatchableContext bc){
+        
+        
+        Database.executeBatch(new BatchCreditMemoQuote(megaOppMap));
+        
+        
+        system.debug('megaOppMap: '+ megaOppMap);
+    }
+    
+}
