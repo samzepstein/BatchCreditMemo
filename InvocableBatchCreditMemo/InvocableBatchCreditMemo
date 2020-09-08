@@ -1,0 +1,20 @@
+public class InvocableBatchCreditMemo {
+    public class CreditMemoRequest{
+        @InvocableVariable(label='Credit Memo Reason')
+        public String cmReason;
+        @InvocableVariable(label='Revised Opportunity?')
+        public Boolean needsRev;
+        @InvocableVariable(label='Internal Fix?')
+        public Boolean isInternal;
+        @InvocableVariable(label='Opportunity Record')
+        public Opportunity creditOppty;
+    }
+    @InvocableMethod(label='Invoke Batch Credit Memo' description='Creates a credit memo opportunity with quote and quote lines')
+    public static void createCreditMemo(List<CreditMemoRequest> cmRequests){
+        Map<Id,CreditMemoRequest> cmRequestMap = new Map<Id,CreditMemoRequest>();
+        for(CreditMemoRequest cmRequest : cmRequests){
+            cmRequestMap.put(cmRequest.creditOppty.Id,cmRequest);
+        }
+        Database.executeBatch(new BatchCreditMemoOpportunity(cmRequestMap));
+    }
+}
