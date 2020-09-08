@@ -1,0 +1,55 @@
+@isTest
+
+public class Test_InvocableBatchCreditMemo{
+    
+    @testSetup
+    public static void setupTests(){
+        
+        Account testAccount1 = new Account(Name='Test Direct Account'
+                                          );
+        
+        insert testAccount1;
+        
+        Opportunity testOpp = new Opportunity(Name='Test Opp 123',
+                                              CloseDate=System.today(),
+                                              StageName='Defined',
+                                              AccountId=testAccount1.Id,
+                                              Type='New');
+        insert testOpp;
+        
+    }
+    
+    
+    
+    
+    public static testMethod void Test_InvocableBatchCreditMemo() {
+        
+        
+        
+        Test.startTest();
+        
+        Opportunity creditOppty = [Select Id, Name, Intacct_Invoice_Number_v2__r.Name, Po_Number__c, New_ACV_static__c from Opportunity WHERE Name = 'Test Opp 123' LIMIT 1];
+        
+        
+        List<InvocableBatchCreditMemo.CreditMemoRequest> cmrList = new List<InvocableBatchCreditMemo.CreditMemoRequest>();    
+        
+        
+        InvocableBatchCreditMemo.CreditMemoRequest cmr = new InvocableBatchCreditMemo.CreditMemoRequest();
+        
+        
+        cmr.needsRev = True;
+        cmr.isInternal = True;
+        cmr.cmReason = 'Test';
+        cmr.creditOppty = creditOppty;
+        
+        cmrList.add(cmr);
+        
+        
+        InvocableBatchCreditMemo.createCreditMemo(cmrList);
+        
+        
+        Test.stopTest();
+         
+        
+    }
+}
