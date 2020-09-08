@@ -1,0 +1,118 @@
+ @IsTest
+public class Test_BatchCreditMemoQuote {
+    
+    
+    @testSetup
+    public static void setupTests(){
+        
+        
+        
+        Account testAccount = new Account(Name='Test Direct Account');
+        
+        insert testAccount;
+        
+        List<Opportunity> oppList = new List<Opportunity>();
+        
+        Opportunity originalOpp = new Opportunity();
+        originalOpp.Name = 'Test oppty';
+        originalOpp.Type = 'New';
+        originalOpp.AccountId = testAccount.Id;
+        originalOpp.StageName = 'Defined';
+        originalOpp.CloseDate = System.today();
+        originalOpp.Amount = 120;
+        
+        oppList.add(originalOpp);
+		        
+        
+        Opportunity cmOpp = new Opportunity();
+        cmOpp.Name = 'cm OPP';
+        cmOpp.Type = 'New';
+        cmOpp.AccountId = testAccount.Id;
+        cmOpp.StageName = 'Defined';
+        cmOpp.CloseDate = System.today();
+        cmOpp.Amount = 120 * -1;
+        cmOpp.Credited_Opportunity__c = originalOpp.id;
+        
+        oppList.add(cmOpp);
+        
+        insert oppList;
+        
+        
+    }
+    
+    //If (quote.SBQQ__Opportunity2__r.Credited_Opportunity__c != NULL && quote.SBQQ__Opportunity2__r.CM_Opportunity__c == NULL){
+    public static testMethod void testCreditOpps(){
+        
+        Map<ID, Map<String,ID>> megaOppMap = new Map<ID, Map<String,ID>>();
+        
+        Map<String, ID> oppMap = new Map<String, ID>();
+        
+        
+        Opportunity originalOpp = [SELECT Id FROM Opportunity WHERE Name = 'Test oppty' LIMIT 1];
+        
+        //Opportunity
+        Opportunity oppty2 = new Opportunity();
+        oppty2.Name = 'Test oppty';
+        oppty2.Type = 'New';
+        oppty2.AccountId = originalOpp.AccountId;
+        oppty2.StageName = 'Defined';
+        oppty2.CloseDate = System.today();
+        oppty2.Amount = 120;
+        oppty2.Credited_Opportunity__c = originalOpp.id;
+        
+        
+        insert oppty2;
+        
+        oppMap.put('Credit', oppty2.id);
+        
+        megaOppMap.put(originalOpp.Id, oppMap);
+        
+        
+        
+        
+        Database.executeBatch(new BatchCreditMemoQuote(megaOppMap));
+        
+    }
+    
+    //If (quote.SBQQ__Opportunity2__r.Credited_Opportunity__c != NULL && quote.SBQQ__Opportunity2__r.CM_Opportunity__c != NULL && quote.SBQQ__Opportunity2__r.REV_Opportunity__c == NULL)
+    public static testMethod void testRevisedOpps(){
+        
+        Map<ID, Map<String,ID>> megaOppMap = new Map<ID, Map<String,ID>>();
+        
+        Map<String, ID> oppMap = new Map<String, ID>();
+        
+        Opportunity originalOpp = [SELECT Id FROM Opportunity WHERE Name = 'Test oppty' LIMIT 1];
+        
+        Opportunity cmOpp = [SELECT Id FROM Opportunity WHERE Name = 'cm OPP' LIMIT 1];
+        
+        //Opportunity
+        Opportunity oppty2 = new Opportunity();
+        oppty2.Name = 'Test oppty';
+        oppty2.Type = 'New';
+        oppty2.AccountId = originalOpp.AccountId;
+        oppty2.StageName = 'Defined';
+        oppty2.CloseDate = System.today();
+        oppty2.Amount = 120;
+        oppty2.Credited_Opportunity__c = originalOpp.id;
+        oppty2.CM_Opportunity__c = cmOpp.id;
+        
+        
+        insert oppty2;
+        
+        oppMap.put('Revised', oppty2.id);
+        
+        megaOppMap.put(originalOpp.Id, oppMap);
+        
+        
+        
+        
+        Database.executeBatch(new BatchCreditMemoQuote(megaOppMap));
+        
+        
+        
+    }
+    
+    
+    
+    
+}
