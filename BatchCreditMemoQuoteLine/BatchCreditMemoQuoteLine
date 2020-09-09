@@ -7,6 +7,8 @@ global class BatchCreditMemoQuoteLine implements Database.Batchable<SObject>, Da
     
     
     
+    
+    
     global BatchCreditMemoQuoteLine(Map<ID, Map<String,ID>> megaQuoteMap, Map<String, ID> quoteMapToPass){
         this.megaQuoteMap = megaQuoteMap;
         this.quoteMapToPass = quoteMapToPass;
@@ -14,7 +16,7 @@ global class BatchCreditMemoQuoteLine implements Database.Batchable<SObject>, Da
     }
     
     
-    public static void createQuoteLines(SBQQ__Quote__c qt, List<SBQQ__QuoteLine__c> creditQtLines,Integer i){
+    public static List<SBQQ__QuoteLine__c> createQuoteLines(SBQQ__Quote__c qt, List<SBQQ__QuoteLine__c> creditQtLines,Integer i){
         List<SBQQ__QuoteLine__c> qlList = new List<SBQQ__QuoteLine__c>();
         
         System.debug('Test Oppty QL for credit: ' + creditQtLines);
@@ -37,8 +39,11 @@ global class BatchCreditMemoQuoteLine implements Database.Batchable<SObject>, Da
             qlList.add(qlEntry);
         }
         
-        insert qlList;
         System.debug('QuoteLines Created: ' + qlList);
+        
+        return qlList;
+        //insert qlList;
+        
     }
     
     
@@ -76,6 +81,8 @@ global class BatchCreditMemoQuoteLine implements Database.Batchable<SObject>, Da
     
     global void execute(Database.BatchableContext bc, List<SBQQ__Quote__c> scope){
         
+        SBQQ.TriggerControl.disable();
+        
         List<SBQQ__Quote__c> quoteList = [SELECT SBQQ__Type__c,SBQQ__Account__c, Price_List__c, Partner_Rep__c, SBQQ__Opportunity2__r.Credited_Opportunity__c, SBQQ__Opportunity2__r.CM_Opportunity__c,SBQQ__Opportunity2__r.REV_Opportunity__c
                                           FROM SBQQ__Quote__c 
                                           WHERE SBQQ__Opportunity2__r.id IN :megaQuoteMap.keySet() AND SBQQ__Primary__c = True 
@@ -99,6 +106,10 @@ global class BatchCreditMemoQuoteLine implements Database.Batchable<SObject>, Da
         
         System.debug('quoteMapToPass: ' +quoteMapToPass);
         
+        System.debug('megaQuoteMap: ' +megaQuoteMap);
+        
+        List<SBQQ__QuoteLine__c> qlListToInsert = new List<SBQQ__QuoteLine__c>();
+        
         for(SBQQ__Quote__c quote : scope){
             
 
@@ -106,31 +117,34 @@ global class BatchCreditMemoQuoteLine implements Database.Batchable<SObject>, Da
             
             If(quote.SBQQ__Opportunity2__r.Credited_Opportunity__c != NULL && quote.SBQQ__Opportunity2__r.CM_Opportunity__c == NULL){
                 
-                createQuoteLines(quote, creditQuoteLines,-1);
+                List<SBQQ__QuoteLine__c> creditList = createQuoteLines(quote, creditQuoteLines,-1);
+                
+                qlListToInsert.addAll(creditList);
                 
                 
             }
             
             If(quote.SBQQ__Opportunity2__r.Credited_Opportunity__c != NULL && quote.SBQQ__Opportunity2__r.CM_Opportunity__c != NULL && quote.SBQQ__Opportunity2__r.REV_Opportunity__c == NULL){
                 
-                createQuoteLines(quote, creditQuoteLines,1);
+                List<SBQQ__QuoteLine__c> revisedList = createQuoteLines(quote, creditQuoteLines,1);
+                
+                qlListToInsert.addAll(revisedList);
                 
                 
             }
             
         }
         
+        System.debug('qlListToInsert: ' +qlListToInsert);
         
         
         
+        insert qlListToInsert;
+        
+        SBQQ.TriggerControl.enable();
         
         
-        
-        
-        
-        
-        
-        
+
         
         
     }
