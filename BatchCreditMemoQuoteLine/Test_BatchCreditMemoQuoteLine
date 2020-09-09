@@ -1,0 +1,183 @@
+@isTest
+public class Test_BatchCreditMemoQuoteLine {
+    
+    
+    @testSetup
+    public static void setupTests(){
+        
+        
+        
+        Account testAccount = new Account(Name='Test Direct Account');
+        
+        insert testAccount;
+        
+        List<Opportunity> oppList = new List<Opportunity>();
+        
+        Opportunity originalOpp = new Opportunity();
+        originalOpp.Name = 'Test oppty';
+        originalOpp.Type = 'New';
+        originalOpp.AccountId = testAccount.Id;
+        originalOpp.StageName = 'Defined';
+        originalOpp.CloseDate = System.today();
+        originalOpp.Amount = 120;
+        
+        oppList.add(originalOpp);
+        
+        
+        Opportunity cmOpp = new Opportunity();
+        cmOpp.Name = 'cm OPP';
+        cmOpp.Type = 'New';
+        cmOpp.AccountId = testAccount.Id;
+        cmOpp.StageName = 'Defined';
+        cmOpp.CloseDate = System.today();
+        cmOpp.Amount = 120 * -1;
+        cmOpp.Credited_Opportunity__c = originalOpp.id;
+        cmOpp.CM_Opportunity__c = NULL;
+        
+        oppList.add(cmOpp);
+        
+        
+        Opportunity revOpp = new Opportunity();
+        revOpp.Name = 'rev OPP';
+        revOpp.Type = 'New';
+        revOpp.AccountId = testAccount.Id;
+        revOpp.StageName = 'Defined';
+        revOpp.CloseDate = System.today();
+        revOpp.Amount = 120 * -1;
+        revOpp.Credited_Opportunity__c = originalOpp.id;
+        revOpp.CM_Opportunity__c = cmOpp.id;
+        
+        oppList.add(revOpp);
+        
+        insert oppList;
+        
+        
+        
+    }
+    
+    //If (quote.SBQQ__Opportunity2__r.Credited_Opportunity__c != NULL && quote.SBQQ__Opportunity2__r.CM_Opportunity__c == NUL){
+    public static testMethod void testCreditQuotes(){
+        
+        Map<ID, Map<String,ID>> testMegaQuoteMap = new Map<ID, Map<String,ID>>();
+        
+        Map<String, ID> testQuoteMapToPass = new Map<String, Id>();
+        
+        
+        Opportunity originalOpp = [SELECT Id, AccountId FROM Opportunity WHERE Name = 'Test oppty' LIMIT 1];
+        
+        Opportunity cmOpp = [SELECT Id, AccountId FROM Opportunity WHERE Name = 'cm OPP' LIMIT 1];
+        
+        SBQQ__Quote__c quote = new SBQQ__Quote__c();
+        
+        quote.SBQQ__Primary__c = True;
+        quote.SBQQ__Opportunity2__c = cmOpp.id;
+        quote.SBQQ__Status__c = 'Draft';
+        quote.SBQQ__Account__c = cmOpp.AccountId;
+        quote.SBQQ__EndDate__c = system.today() + 365;
+        
+        
+        insert quote; 
+        
+        Product2 product = new Product2();
+        
+        
+        product.Name = 'GoGuardian Suite';
+        product.ProductCode = 'GG-STE';
+        product.SBQQ__SubscriptionType__c = 'Renewable';
+        
+        
+        insert product;       
+        
+        
+        SBQQ__QuoteLine__c quoteLine = new SBQQ__QuoteLine__c();
+        
+        quoteLine.SBQQ__Quote__c = quote.id;
+        quoteLine.SBQQ__EndDate__c = quote.SBQQ__EndDate__c;
+        quoteLine.Deal_Type__c = 'New';
+        quoteLine.SBQQ__Product__c = product.id;
+        
+        insert quoteLine;
+        
+        
+        testQuoteMapToPass.put('Credit', quote.id);
+        
+        testMegaQuoteMap.put(cmOpp.Id, testQuoteMapToPass);
+        
+        system.debug('testQuoteMapToPass: '+ testQuoteMapToPass);
+        
+        system.debug('testMegaQuoteMap: '+ testMegaQuoteMap);
+        
+        system.debug('cmOpp: '+ cmOpp);
+        
+        system.debug('originalOpp: '+ originalOpp);
+            
+         
+            
+            
+        
+        
+        
+        
+        Database.executeBatch(new BatchCreditMemoQuoteLine(testMegaQuoteMap, testQuoteMapToPass ));
+        
+    }
+    
+    //IF quote.SBQQ__Opportunity2__r.Credited_Opportunity__c != NULL && quote.SBQQ__Opportunity2__r.CM_Opportunity__c != NULL && quote.SBQQ__Opportunity2__r.REV_Opportunity__c == NULL
+    public static testMethod void testRevisedQuotes(){
+        
+        Map<ID, Map<String,ID>> testMegaQuoteMap = new Map<ID, Map<String,ID>>();
+        
+        Map<String, ID> testQuoteMapToPass = new Map<String, Id>();
+        
+        
+        Opportunity originalOpp = [SELECT Id, AccountId FROM Opportunity WHERE Name = 'Test oppty' LIMIT 1];
+        
+        Opportunity revOpp = [SELECT Id, AccountId FROM Opportunity WHERE Name = 'rev OPP' LIMIT 1];
+        
+        SBQQ__Quote__c quote = new SBQQ__Quote__c();
+        
+        quote.SBQQ__Primary__c = True;
+        quote.SBQQ__Opportunity2__c = revOpp.id;
+        quote.SBQQ__Status__c = 'Draft';
+        quote.SBQQ__Account__c = revOpp.AccountId;
+        quote.SBQQ__EndDate__c = system.today() + 365;
+        
+        
+        insert quote;       
+        
+        
+        Product2 product = new Product2();
+        
+        
+        product.Name = 'GoGuardian Suite';
+        product.ProductCode = 'GG-STE';
+        product.SBQQ__SubscriptionType__c = 'Renewable';
+        
+        
+        insert product;       
+        
+        
+        SBQQ__QuoteLine__c quoteLine = new SBQQ__QuoteLine__c();
+        
+        quoteLine.SBQQ__Quote__c = quote.id;
+        quoteLine.SBQQ__EndDate__c = quote.SBQQ__EndDate__c;
+        quoteLine.Deal_Type__c = 'New';
+        quoteLine.SBQQ__Product__c = product.id;
+        
+        insert quoteLine;
+        
+        testQuoteMapToPass.put('Revised', quote.id);
+        
+        testMegaQuoteMap.put(originalOpp.Id, testQuoteMapToPass);
+        
+        
+        
+        
+        Database.executeBatch(new BatchCreditMemoQuoteLine(testMegaQuoteMap, testQuoteMapToPass ));
+        
+    }
+    
+    
+    
+    
+}
