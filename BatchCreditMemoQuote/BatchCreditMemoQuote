@@ -1,28 +1,26 @@
 global class BatchCreditMemoQuote implements Database.Batchable<SObject>, Database.Stateful{
     
-    Set<Id> quoteIds = new Set<ID>();
     
-    List<Id> cmOppIds = new List<ID>();
+    global Map<ID, Map<String,ID>> megaOppMap = new Map<ID, Map<String,ID>>();
     
-    List<Id> revOppIds = new List<ID>();
+    global Map<ID, Map<String,ID>> megaQuoteMap = new Map<ID, Map<String,ID>>();
     
-    
-    
+    global Map<String, ID> quoteMapToPass = new Map<String, ID>();
     
     
-    global BatchCreditMemoQuote(List<ID> cmOppIds, List<ID> revOppIds){
-        this.cmOppIds = cmOppIds;
-        this.revOppIds = revOppIds;
+    
+    global BatchCreditMemoQuote(Map<ID, Map<String,ID>> megaOppMap){
+        this.megaOppMap = megaOppMap;
         
     }
     
     
-    global static SBQQ__Quote__c createQuote(Id opId, SBQQ__Quote__c qte){
-        SBQQ__Quote__c newQuote = new SBQQ__Quote__c(SBQQ__Type__c = qte.SBQQ__Type__c,
-                                                     SBQQ__Primary__c = True,
+    global static SBQQ__Quote__c createQuote(Opportunity opp){
+        SBQQ__Quote__c newQuote = new SBQQ__Quote__c(SBQQ__Primary__c = True,
                                                      SBQQ__Status__c = 'Draft',
-                                                     SBQQ__Opportunity2__c = opId,
-                                                     SBQQ__Account__c = qte.SBQQ__Account__c);
+                                                     SBQQ__Opportunity2__c = opp.Id,
+                                                     SBQQ__Type__c = opp.Primary_Quote_Type__c,
+                                                     SBQQ__Account__c = opp.AccountId);
         
         return newQuote;
         
@@ -32,33 +30,118 @@ global class BatchCreditMemoQuote implements Database.Batchable<SObject>, Databa
     
     global Database.QueryLocator start(Database.BatchableContext bc) {
         
-        String oppList = '[SELECT ID, Contract_Start_Date__c, Contract_End_Date__c, CloseDate'+
-            'FROM Opportunity'+
-            'WHERE Id IN :cmOppIds OR SBQQ__Opportunity2__c IN :revOppsIds]';
         
-        system.debug('creditQuote: '+ oppList);
+        List<Id> oppMapIds = new List<Id>();
         
-        return Database.getQueryLocator(oppList);
+        
+        List<Map<String,ID>> megaOppMapValues = megaOppMap.values();
+        
+        for(Map<String,ID> oppId : megaOppMapValues){
+            
+            oppMapIds.addAll(oppId.values());
+            
+            
+        }
+        
+        system.debug('oppMapIds:'+ oppMapIds);
+        
+        
+        return Database.getQueryLocator(
+            [SELECT Id, Name, Contract_Start_Date__c, Contract_End_Date__c, CloseDate, Credited_Opportunity__r.Id, CM_Opportunity__c, REV_Opportunity__c, Primary_Quote_Type__c, AccountId
+             FROM Opportunity
+             WHERE Id IN :oppMapIds]
+            
+        );
+        
+        
         
         
     }
     
+    //original opp: CM_Opportunity__c
     
     global void execute(Database.BatchableContext bc, List<Opportunity> scope){
         
+        system.debug('scope:'+scope);
+        
+        List<SBQQ__Quote__c> quoteList = new List<SBQQ__Quote__c>();
         
         
-        List<SBQQ__Quote__c> oppQuoteList  = [SELECT SBQQ__Type__c,SBQQ__Account__c, Price_List__c, Partner_Rep__c
-                                FROM SBQQ__Quote__c
-                                WHERE SBQQ__Opportunity2__c IN :cmOppIds OR SBQQ__Opportunity2__c IN :revOppsIds AND SBQQ__Primary__c = True]
+        for(Opportunity opp : scope){
+            
+            SBQQ__Quote__c newQuote = createQuote(opp);
+            
+            quoteList.add(newQuote);
+            
+        }
+        
+        system.debug('quoteList: '+ quoteList);
+        
+        insert quoteList;
+        
+        List<SBQQ__Quote__c> newQuoteList = [SELECT ID, SBQQ__Opportunity2__r.Credited_Opportunity__r.id, SBQQ__Opportunity2__r.CM_Opportunity__c, SBQQ__Opportunity2__r.REV_Opportunity__c FROM SBQQ__Quote__c WHERE ID IN :quoteList];
+        
+        system.debug('newQuoteList: '+ newQuoteList);
+        
+        for(SBQQ__Quote__c quote : newQuoteList){
+            
+            
+            ID originalOppID = quote.SBQQ__Opportunity2__r.Credited_Opportunity__r.Id;
+            
+            Map<String, ID> quoteMapToAdd  = megaQuoteMap.containsKey(originalOppID) ? megaQuoteMap.get(originalOppID) : new Map<String, ID>();
+            
+            system.debug('originalOppID: '+ originalOppID);
+            
+            If (quote.SBQQ__Opportunity2__r.Credited_Opportunity__c != NULL && quote.SBQQ__Opportunity2__r.CM_Opportunity__c == NULL){
+                
+                
+                quoteMapToAdd.put('Credit', quote.id);
+                
+                quoteMapToPass.put('Credit', quote.id);
+                
+                
+            }
+            
+            If (quote.SBQQ__Opportunity2__r.Credited_Opportunity__c != NULL && quote.SBQQ__Opportunity2__r.CM_Opportunity__c != NULL && quote.SBQQ__Opportunity2__r.REV_Opportunity__c == NULL){
+                
+                
+                quoteMapToAdd.put('Revised', quote.id);
+                
+                quoteMapToPass.put('Revised', quote.id);
+                
+            }
+            
+            system.debug('quoteMapToAdd: '+ quoteMapToAdd);
+            
+            megaQuoteMap.put(originalOppID, quoteMapToAdd);
+            
+        }
         
         
-        system.debug('start'); 
+        
+        
+        
+        
     }
+    
+    
+    
+    
+    
+    
+    
+    
     
     
     
     global void finish(Database.BatchableContext bc){
+        
+        system.debug('megaQuoteMap'+ megaQuoteMap);
+        
+        Database.executeBatch(new BatchCreditMemoQuoteLine(megaQuoteMap, quoteMapToPass));
+        
+        system.debug('yay!');
+        
         
     }
 }
