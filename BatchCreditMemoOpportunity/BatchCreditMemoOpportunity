@@ -25,7 +25,7 @@ global class BatchCreditMemoOpportunity implements Database.Batchable<SObject>, 
         SET<ID> cmRequestMapSet = cmRequestMap.keySet();
         
         String thisOpp = 'SELECT Id, Name, New_ACV_static__c, Contract_Start_Date__c, Contract_End_Date__c, CloseDate,'+
-            'Po_Number__c, Intacct_Invoice_Number_v2__r.Name FROM Opportunity WHERE Id IN :cmRequestMapSet';
+            'Po_Number__c, Intacct_Invoice_Number_v2__r.Name, CSM_Named_Account__c, Account_CSM__c, Account_AE__c FROM Opportunity WHERE Id IN :cmRequestMapSet';
         
         
         return Database.getQueryLocator(thisOpp);
@@ -75,6 +75,10 @@ global class BatchCreditMemoOpportunity implements Database.Batchable<SObject>, 
         cmOppty.CM_REV_Reason__c = cmr.cmReason;
         cmOppty.Credited_Opportunity__c = cmr.creditOppty.Id;
         
+        cmOppty.Account_AE__c = cmr.creditOppty.Account_AE__c;
+        cmOppty.Account_CSM__c = cmr.creditOppty.Account_CSM__c;
+        cmOppty.CSM_Named_Account__c = cmr.creditOppty.CSM_Named_Account__c;
+        
         If(cmr.creditOppty.New_ACV_static__c != NULL){
             
             cmOppty.New_ACV_static__c = cmr.creditOppty.New_ACV_static__c * -1;
@@ -99,6 +103,9 @@ global class BatchCreditMemoOpportunity implements Database.Batchable<SObject>, 
         revOppty.Exclude_from_Xactly__c = True;
         revOppty.Do_not_Send_Invoice__c = cmr.isInternal;
         revOppty.Do_not_send_welcome_letter__c = true;
+        revOppty.Account_AE__c = cmr.creditOppty.Account_AE__c;
+        revOppty.Account_CSM__c = cmr.creditOppty.Account_CSM__c;
+        revOppty.CSM_Named_Account__c = cmr.creditOppty.CSM_Named_Account__c;
         
         return revOppty;
         
