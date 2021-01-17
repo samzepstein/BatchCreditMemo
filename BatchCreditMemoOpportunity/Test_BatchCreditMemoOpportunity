@@ -4,11 +4,44 @@ public class Test_BatchCreditMemoOpportunity {
     @testSetup
     public static void setupTests(){
         
-        
+        List<Opportunity> oppList = new List<Opportunity>();
         
         Account testAccount = new Account(Name='Test Direct Account');
         
         insert testAccount;
+        
+        User testUser = [SELECT ID, Name FROM User WHERE Name = 'Sam Epstein' LIMIT 1];
+        
+        
+        
+        
+        Opportunity testOpp = new Opportunity(Name='Test Opp',
+                                              CloseDate=System.today() + 30,
+                                              StageName='Defined',
+                                              AccountId=testAccount.Id,
+                                              Type='New',
+                                              Po_Number__c = 'testpoSam123',
+                                              Account_CSM__c = testUser.id,
+                                              CSM_Named_Account__c = TRUE);
+        
+        oppList.add(testOpp);
+        
+        
+        Opportunity testOpp2 = new Opportunity(Name='Test Opp 123',
+                                               CloseDate=System.today() + 30,
+                                               StageName='Defined',
+                                               AccountId=testAccount.Id,
+                                               Type='New',
+                                               Po_Number__c = 'testpoSam',
+                                               New_ACV_static__c = 1123,
+                                               Account_CSM__c = testUser.id,
+                                               CSM_Named_Account__c = TRUE);
+                                           
+        
+        oppList.add(testOpp2);
+        
+        
+        insert oppList;
         
     }
     
@@ -16,19 +49,11 @@ public class Test_BatchCreditMemoOpportunity {
     public static testMethod void oppWithACV(){
         
         
-        Account testAccount = [SELECT Id FROM Account WHERE Name ='Test Direct Account' LIMIT 1];
-        
-        Opportunity testOpp = new Opportunity(Name='Test Opp 123',
-                                              CloseDate=System.today() + 30,
-                                              StageName='Defined',
-                                              AccountId=testAccount.Id,
-                                              Type='New',
-                                              New_ACV_static__c = 1123);
-        
-        insert testOpp;
         
         
-        Opportunity creditOppty = [Select Id, Name, Intacct_Invoice_Number_v2__r.Name, Po_Number__c, New_ACV_static__c from Opportunity WHERE Name = 'Test Opp 123' LIMIT 1];
+        Opportunity creditOppty = [Select Id, Name, Intacct_Invoice_Number_v2__r.Name, Po_Number__c, New_ACV_static__c, Account_CSM__c, CSM_Named_Account__c, Account_AE__c 
+                                   from Opportunity 
+                                   WHERE Name = 'Test Opp 123' LIMIT 1];
         
         
         List<InvocableBatchCreditMemo.CreditMemoRequest> cmrList = new List<InvocableBatchCreditMemo.CreditMemoRequest>();    
@@ -51,7 +76,7 @@ public class Test_BatchCreditMemoOpportunity {
         }
         
         
-        InvocableBatchCreditMemo.createCreditMemo(cmrList);
+        //InvocableBatchCreditMemo.createCreditMemo(cmrList);
         
         Database.executeBatch(new BatchCreditMemoOpportunity(cmRequestMap));
         
@@ -60,20 +85,11 @@ public class Test_BatchCreditMemoOpportunity {
     
     public static testMethod void oppWithoutACV(){
         
-        Account testAccount = [SELECT Id FROM Account WHERE Name ='Test Direct Account' LIMIT 1];
         
-        
-        Opportunity testOpp = new Opportunity(Name='Test Opp',
-                                              CloseDate=System.today() + 30,
-                                              StageName='Defined',
-                                              AccountId=testAccount.Id,
-                                              Type='New');
-        
-        
-        insert testOpp;
-        
-        
-        Opportunity creditOppty = [Select Id, Name, Intacct_Invoice_Number_v2__r.Name, Po_Number__c, New_ACV_static__c from Opportunity WHERE Name = 'Test Opp 123' LIMIT 1];
+
+        Opportunity creditOppty = [Select Id, Name, Intacct_Invoice_Number_v2__r.Name, Po_Number__c, New_ACV_static__c, Account_CSM__c, CSM_Named_Account__c, Account_AE__c 
+                                   from Opportunity 
+                                   WHERE Name = 'Test Opp' LIMIT 1];
         
         
         List<InvocableBatchCreditMemo.CreditMemoRequest> cmrList = new List<InvocableBatchCreditMemo.CreditMemoRequest>();    
@@ -96,7 +112,7 @@ public class Test_BatchCreditMemoOpportunity {
         }
         
         
-        InvocableBatchCreditMemo.createCreditMemo(cmrList);
+        //InvocableBatchCreditMemo.createCreditMemo(cmrList);
         
         Database.executeBatch(new BatchCreditMemoOpportunity(cmRequestMap));
         
